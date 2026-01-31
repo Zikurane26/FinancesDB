@@ -1,16 +1,20 @@
 import { supabase } from './supabase'
 
-export async function getPersonaActual() {
+export async function getPersonaActual(): Promise<string | null> {
   const { data: userData } = await supabase.auth.getUser()
-  const user = userData.user
 
-  if (!user) return null
+  if (!userData.user) return null
 
-  const { data: persona } = await supabase
+  const { data, error } = await supabase
     .from('personas')
     .select('id_persona')
-    .eq('user_id', user.id)
+    .eq('user_id', userData.user.id)
     .single()
 
-  return persona
+  if (error) {
+    console.log('❌ Error obteniendo persona:', error.message)
+    return null
+  }
+
+  return data.id_persona
 }

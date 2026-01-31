@@ -19,7 +19,14 @@ export default function Index() {
 
   return (
     <View style={{ marginTop: 50 }}>
-      <Text>Finanzas App</Text>
+      <Text style={{
+                borderWidth: 1,
+                borderColor: '#555',
+                marginBottom: 12,
+                padding: 10,
+                color: '#fff',
+                backgroundColor: '#222',
+                borderRadius: 6}}>Finanzas App</Text>
     </View>
   )
 }

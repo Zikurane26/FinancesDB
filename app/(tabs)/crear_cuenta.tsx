@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Text, TextInput, View } from 'react-native'
-import { getPersonaActual } from '../src/lib/persona'
-import { supabase } from '../src/lib/supabase'
+import { getPersonaActual } from '../../src/lib/persona'
+import { supabase } from '../../src/lib/supabase'
 
 export default function CrearCuenta() {
   const [nombre, setNombre] = useState('')
@@ -20,8 +20,13 @@ export default function CrearCuenta() {
       tipo_cuenta: 'Efectivo',
       saldo_inicial: Number(saldo),
       saldo_actual: Number(saldo),
-      id_persona: persona.id_persona,
+      id_persona: persona,
     })
+    if (!persona) {
+    console.log('❌ No se pudo obtener id_persona')
+    return
+    }
+
 
     if (error) {
       console.log('❌ Error creando cuenta:', error.message)

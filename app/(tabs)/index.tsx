@@ -15,25 +15,30 @@ import { formatMoney } from '../../src/lib/format'
 import { supabase } from '../../src/lib/supabase'
 
 const screenWidth = Dimensions.get('window').width
+const CURRENT_YEAR = new Date().getFullYear()
 
 type Cuenta = {
   id_cuenta: string
   nombre: string
 }
 
+type Vista = 'ANUAL' | 'MENSUAL'
+
 export default function Index() {
   const [dark, setDark] = useState(false)
+  const [vista, setVista] = useState<Vista>('ANUAL')
+
   const [mes, setMes] = useState(new Date())
+  const [anio, setAnio] = useState<number>(CURRENT_YEAR)
+
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
   const [cuentaId, setCuentaId] = useState<string>('ALL')
+
   const [resumen, setResumen] = useState<any>(null)
+  const [labels, setLabels] = useState<string[]>([])
   const [evolucion, setEvolucion] = useState<number[]>([])
+
   const fadeAnim = useRef(new Animated.Value(0)).current
-  const [vista, setVista] = useState<'ANUAL' | 'MENSUAL'>('ANUAL')
-  const anio = mes.getFullYear()
-  const mesNum = vista === 'MENSUAL' ? mes.getMonth() + 1 : null
-
-
 
   /* 🌙 Tema persistente */
   useEffect(() => {
@@ -48,10 +53,10 @@ export default function Index() {
     await AsyncStorage.setItem('theme', value ? 'dark' : 'light')
   }
 
-  /* 📅 Cargar datos */
+  /* 🔄 Cargar datos */
   useEffect(() => {
     cargarTodo()
-  }, [mes, cuentaId])
+  }, [mes, anio, cuentaId, vista])
 
   const cargarTodo = async () => {
     Animated.timing(fadeAnim, {
@@ -61,7 +66,7 @@ export default function Index() {
     }).start()
 
     const month = mes.getMonth() + 1
-    const year = mes.getFullYear()
+    const cuentaParam = cuentaId === 'ALL' ? null : cuentaId
 
     /* 🏦 Cuentas */
     const { data: cuentasData } = await supabase
@@ -70,38 +75,39 @@ export default function Index() {
 
     setCuentas(cuentasData || [])
 
-    /* 📊 Resumen */
-    const { data: resumenData, error: resumenError } =
-      await supabase.rpc('resumen_mes', {
-        p_mes: month,
-        p_anio: year,
-        p_cuenta_id: cuentaId === 'ALL' ? null : cuentaId,
-      })
-
-    if (resumenError) {
-      console.log('❌ Error resumen:', resumenError.message)
-    }
+    /* 📊 Resumen (sigue siendo mensual, incluso en vista anual) */
+    const { data: resumenData } = await supabase.rpc('resumen_mes', {
+      p_mes: month,
+      p_anio: anio,
+      p_cuenta_id: cuentaParam,
+    })
 
     setResumen(resumenData?.[0] || null)
 
-    /* 📈 Evolución diaria */
-    console.log('Cuenta enviada:', cuentaId === 'ALL' ? null : cuentaId)
+    /* 📈 EVOLUCIÓN */
+    if (vista === 'ANUAL') {
+      const { data } = await supabase.rpc('evolucion_mensual_anio', {
+        p_anio: anio,
+        p_cuenta_id: cuentaParam,
+      })
 
-    const { data: evoData, error: evoError } = await supabase.rpc(
-      'evolucion_diaria_mes',
-      {
+      setLabels(
+        data?.map((d: any) =>
+          new Date(anio, d.mes - 1).toLocaleString('es-CO', { month: 'short' })
+        ) || []
+      )
+
+      setEvolucion(data?.map((d: any) => d.total) || [])
+    } else {
+      const { data } = await supabase.rpc('evolucion_diaria_mes', {
         p_mes: month,
-        p_anio: year,
-        p_cuenta_id: cuentaId === 'ALL' ? null : cuentaId,
-      }
-    )
+        p_anio: anio,
+        p_cuenta_id: cuentaParam,
+      })
 
-    if (evoError) {
-      console.log('❌ Error evolución:', evoError.message)
+      setLabels(data?.map((_: any, i: number) => `${i + 1}`) || [])
+      setEvolucion(data?.map((d: any) => d.total) || [])
     }
-
-    setEvolucion(evoData?.map((d: any) => d.total) || [])
-
 
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -116,6 +122,10 @@ export default function Index() {
     setMes(nuevo)
   }
 
+  const cambiarAnio = (delta: number) => {
+    setAnio(prev => prev + delta)
+  }
+
   if (!resumen) return <Text>Cargando…</Text>
 
   const balance = resumen.ingresos - resumen.egresos
@@ -123,20 +133,45 @@ export default function Index() {
 
   return (
     <ScrollView style={styles(dark).container}>
-      {/* 📅 Selector mes */}
+      {/* 🔁 Selector vista */}
       <View style={styles(dark).row}>
-        <TouchableOpacity onPress={() => cambiarMes(-1)}>
+        <TouchableOpacity onPress={() => setVista('ANUAL')}>
+          <Text style={{ fontWeight: vista === 'ANUAL' ? '700' : '400' }}>
+            ANUAL
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setVista('MENSUAL')}>
+          <Text style={{ fontWeight: vista === 'MENSUAL' ? '700' : '400' }}>
+            MENSUAL
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 📆 Año */}
+      <View style={styles(dark).row}>
+        <TouchableOpacity onPress={() => cambiarAnio(-1)}>
           <Text style={styles(dark).nav}>←</Text>
         </TouchableOpacity>
-
-        <Text style={styles(dark).title}>
-          {mes.toLocaleString('es-CO', { month: 'long', year: 'numeric' })}
-        </Text>
-
-        <TouchableOpacity onPress={() => cambiarMes(1)}>
+        <Text style={styles(dark).title}>{anio}</Text>
+        <TouchableOpacity onPress={() => cambiarAnio(1)}>
           <Text style={styles(dark).nav}>→</Text>
         </TouchableOpacity>
       </View>
+
+      {/* 📅 Mes (solo mensual) */}
+      {vista === 'MENSUAL' && (
+        <View style={styles(dark).row}>
+          <TouchableOpacity onPress={() => cambiarMes(-1)}>
+            <Text style={styles(dark).nav}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles(dark).title}>
+            {mes.toLocaleString('es-CO', { month: 'long' })}
+          </Text>
+          <TouchableOpacity onPress={() => cambiarMes(1)}>
+            <Text style={styles(dark).nav}>→</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* 🌙 Toggle */}
       <TouchableOpacity onPress={toggleTheme}>
@@ -145,18 +180,13 @@ export default function Index() {
         </Text>
       </TouchableOpacity>
 
-      {/* 🏦 Selector cuenta */}
+      {/* 🏦 Cuenta */}
       <Picker selectedValue={cuentaId} onValueChange={setCuentaId}>
-      <Picker.Item label="Todas las cuentas" value="ALL" />
-      {cuentas.map(c => (
-        <Picker.Item
-          key={c.id_cuenta}
-          label={c.nombre}
-          value={c.id_cuenta}
-        />
-      ))}
-    </Picker>
-
+        <Picker.Item label="Todas las cuentas" value="ALL" />
+        {cuentas.map(c => (
+          <Picker.Item key={c.id_cuenta} label={c.nombre} value={c.id_cuenta} />
+        ))}
+      </Picker>
 
       <Animated.View style={{ opacity: fadeAnim }}>
         {/* 📊 KPI */}
@@ -168,10 +198,10 @@ export default function Index() {
           </Text>
         </View>
 
-        {/* 📈 Evolución */}
+        {/* 📈 Gráfica */}
         <LineChart
           data={{
-            labels: evolucion.map((_, i) => `${i + 1}`),
+            labels,
             datasets: [{ data: evolucion }],
           }}
           width={screenWidth - 32}
@@ -203,6 +233,7 @@ const styles = (dark: boolean) =>
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
+      marginBottom: 8,
     },
     title: {
       fontSize: 20,

@@ -1,6 +1,8 @@
+import { router } from 'expo-router'
 import { useState } from 'react'
 import { Button, Text, TextInput, View } from 'react-native'
 import { supabase } from '../src/lib/supabase'
+
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
@@ -20,8 +22,8 @@ export default function LoginScreen() {
   } else {
     console.log('✅ Usuario logueado:', data.user)
 
-    const session = await supabase.auth.getUser()
-    console.log('🧠 Sesión actual:', session.data.user)
+    //const session = await supabase.auth.getUser()
+    //console.log('🧠 Sesión actual:', session.data.user)
     await ensurePersona()
      // 🔍 PRUEBA RLS (TEMPORAL)
     const { data: personas } = await supabase
@@ -34,6 +36,10 @@ export default function LoginScreen() {
 
     console.log('💳 Cuentas visibles:', cuentas)
     console.log('❌ Error:', error)
+    await ensurePersona()
+
+    // ✅ REDIRECCIÓN
+    router.replace('/(tabs)')
 
     
   }

@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { formatMoney } from '@/src/lib/format'
+import { useFocusEffect } from 'expo-router'
+import { useCallback, useEffect, useState } from 'react'
 import { FlatList, Text, View } from 'react-native'
 import { supabase } from '../../src/lib/supabase'
 
@@ -14,6 +16,8 @@ export default function CuentasScreen() {
   const [loading, setLoading] = useState(true)
 
   const cargarCuentas = async () => {
+    setLoading(true)
+
     const { data, error } = await supabase
       .from('cuentas')
       .select('id_cuenta, nombre, saldo_actual, tipo_cuenta')
@@ -27,9 +31,17 @@ export default function CuentasScreen() {
     setLoading(false)
   }
 
+  // Primera carga
   useEffect(() => {
     cargarCuentas()
   }, [])
+
+  // Cada vez que vuelves a esta pantalla
+  useFocusEffect(
+    useCallback(() => {
+      cargarCuentas()
+    }, [])
+  )
 
   return (
     <View style={{ flex: 1, padding: 24 }}>
@@ -50,24 +62,44 @@ export default function CuentasScreen() {
                 marginBottom: 8,
               }}
             >
-              <Text style={{borderColor: '#555',
-            marginBottom: 12,
-            padding: 10,
-            color: '#fff',
-            backgroundColor: '#222',
-            borderRadius: 6}}>{item.nombre}</Text>
-              <Text style={{borderColor: '#555',
-            marginBottom: 12,
-            padding: 10,
-            color: '#fff',
-            backgroundColor: '#222',
-            borderRadius: 6}}>Tipo: {item.tipo_cuenta}</Text>
-              <Text style={{borderColor: '#555',
-            marginBottom: 12,
-            padding: 10,
-            color: '#fff',
-            backgroundColor: '#222',
-            borderRadius: 6}}>Saldo: ${item.saldo_actual}</Text>
+              <Text
+                style={{
+                  borderColor: '#555',
+                  marginBottom: 12,
+                  padding: 10,
+                  color: '#fff',
+                  backgroundColor: '#222',
+                  borderRadius: 6,
+                }}
+              >
+                {item.nombre}
+              </Text>
+
+              <Text
+                style={{
+                  borderColor: '#555',
+                  marginBottom: 12,
+                  padding: 10,
+                  color: '#fff',
+                  backgroundColor: '#222',
+                  borderRadius: 6,
+                }}
+              >
+                Tipo: {item.tipo_cuenta}
+              </Text>
+
+              <Text
+                style={{
+                  borderColor: '#555',
+                  marginBottom: 12,
+                  padding: 10,
+                  color: '#fff',
+                  backgroundColor: '#222',
+                  borderRadius: 6,
+                }}
+              >
+                <Text>Saldo: {formatMoney(item.saldo_actual)}</Text>
+              </Text>
             </View>
           )}
         />
@@ -75,4 +107,3 @@ export default function CuentasScreen() {
     </View>
   )
 }
-

@@ -1,41 +1,129 @@
 import { getPersonaActual } from '@/src/lib/persona'
 import { supabase } from '@/src/lib/supabase'
 import { useEffect, useState } from 'react'
-import { Alert, Button, Text, TextInput, View } from 'react-native'
+import {
+  Alert,
+  Button,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native'
+
+/* ───────────────────────────────
+   Tipos
+─────────────────────────────── */
 
 type Cuenta = {
   id_cuenta: string
   nombre: string
 }
 
+type TipoMovimiento = {
+  id_tipo: number
+  nombre: string
+}
+
+type Categoria = {
+  id_categoria: string
+  nombre: string
+  id_tipo: number
+}
+
+/* ───────────────────────────────
+   Pantalla
+─────────────────────────────── */
+
 export default function TransaccionesScreen() {
   const [idPersona, setIdPersona] = useState<string | null>(null)
+
   const [monto, setMonto] = useState('')
   const [descripcion, setDescripcion] = useState('')
-  const [idCuenta, setIdCuenta] = useState<string | null>(null)
+  const [fecha, setFecha] = useState(
+    new Date().toISOString().split('T')[0]
+  )
+
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
+  const [idCuenta, setIdCuenta] = useState<string | null>(null)
+
+  const [tipos, setTipos] = useState<TipoMovimiento[]>([])
+  const [idTipo, setIdTipo] = useState<number | null>(null)
+
+  const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [idCategoria, setIdCategoria] = useState<string | null>(null)
+
   const [loading, setLoading] = useState(false)
 
+  /* ───────────────────────────────
+     Carga inicial
+  ─────────────────────────────── */
+
   useEffect(() => {
-    const cargarDatos = async () => {
+    const cargarInicial = async () => {
       const personaId = await getPersonaActual()
       setIdPersona(personaId)
 
-      const { data, error } = await supabase
+      const { data: cuentasData } = await supabase
         .from('cuentas')
         .select('id_cuenta, nombre')
+        .eq('activa', true)
+        .order('nombre')
 
-      if (!error) {
-        setCuentas(data || [])
-      }
+      setCuentas(cuentasData || [])
+
+      const { data: tiposData } = await supabase
+        .from('tipos_movimiento')
+        .select('id_tipo, nombre')
+        .order('id_tipo')
+
+      setTipos(tiposData || [])
     }
 
-    cargarDatos()
+    cargarInicial()
   }, [])
 
+  /* ───────────────────────────────
+     Categorías dependientes del tipo
+  ─────────────────────────────── */
+
+  useEffect(() => {
+    if (!idTipo) {
+      setCategorias([])
+      setIdCategoria(null)
+      return
+    }
+
+    const cargarCategorias = async () => {
+      const { data } = await supabase
+        .from('categorias')
+        .select('id_categoria, nombre, id_tipo')
+        .eq('id_tipo', idTipo)
+        .order('nombre')
+
+      setCategorias(data || [])
+      setIdCategoria(null)
+    }
+
+    cargarCategorias()
+  }, [idTipo])
+
+  /* ───────────────────────────────
+     Crear transacción
+  ─────────────────────────────── */
+
   const crearTransaccion = async () => {
-    if (!idPersona || !idCuenta || !monto) {
-      console.log('❌ Falta persona, cuenta o monto')
+    if (!idPersona || !idCuenta || !idTipo || !monto) {
+      Alert.alert(
+        'Faltan datos',
+        'Monto, tipo y cuenta son obligatorios'
+      )
+      return
+    }
+
+    const montoNumero = Number(monto)
+
+    if (isNaN(montoNumero) || montoNumero <= 0) {
+      Alert.alert('Monto inválido', 'El monto debe ser mayor a 0')
       return
     }
 
@@ -46,10 +134,11 @@ export default function TransaccionesScreen() {
       {
         p_id_persona: idPersona,
         p_id_cuenta: idCuenta,
-        p_id_tipo: 2, // egreso
-        p_monto: Number(monto),
-        p_descripcion: descripcion,
-        p_fecha: new Date().toISOString().split('T')[0],
+        p_id_tipo: idTipo,
+        p_id_categoria: idCategoria,
+        p_monto: montoNumero,
+        p_descripcion: descripcion || null,
+        p_fecha: fecha,
       }
     )
 
@@ -57,23 +146,48 @@ export default function TransaccionesScreen() {
 
     if (error) {
       console.log('❌ Error RPC:', error.message)
-      Alert.alert('Error', 'No se pudo crear la transacción')
+      Alert.alert('Error', error.message)
       return
     }
 
-    console.log('✅ Transacción creada y saldo actualizado')
-
-    // ✅ Limpiar formulario
+    /* 🔄 Reset controlado */
     setMonto('')
     setDescripcion('')
     setIdCuenta(null)
+    setIdTipo(null)
+    setCategorias([])
+    setIdCategoria(null)
+    setFecha(new Date().toISOString().split('T')[0])
 
     Alert.alert('Listo', 'Transacción registrada correctamente')
   }
 
+  /* ───────────────────────────────
+     Helpers UI
+  ─────────────────────────────── */
+
+  const colorPorTipo = (tipoId: number | null) => {
+    switch (tipoId) {
+      case 1:
+        return '#2e7d32' // Ingreso
+      case 2:
+        return '#c62828' // Egreso
+      case 3:
+        return '#1565c0' // Ahorro
+      case 4:
+        return '#6a1b9a' // Transferencia
+      default:
+        return '#333'
+    }
+  }
+
+  /* ───────────────────────────────
+     Render
+  ─────────────────────────────── */
+
   return (
     <View style={{ flex: 1, padding: 24 }}>
-      <Text style={{ fontSize: 20, marginBottom: 12 }}>
+      <Text style={{ fontSize: 20, marginBottom: 16 }}>
         Nueva transacción
       </Text>
 
@@ -83,58 +197,59 @@ export default function TransaccionesScreen() {
         value={monto}
         onChangeText={setMonto}
         keyboardType="numeric"
-        style={{
-          borderWidth: 1,
-          borderColor: '#555',
-          marginBottom: 12,
-          padding: 10,
-          color: '#fff',
-          backgroundColor: '#222',
-          borderRadius: 6,
-        }}
+        style={inputStyle}
       />
 
       <TextInput
-        placeholder="Descripción"
+        placeholder="Descripción (opcional)"
         placeholderTextColor="#aaa"
         value={descripcion}
         onChangeText={setDescripcion}
-        style={{
-          borderWidth: 1,
-          borderColor: '#555',
-          marginBottom: 12,
-          padding: 10,
-          color: '#fff',
-          backgroundColor: '#222',
-          borderRadius: 6,
-        }}
+        style={inputStyle}
       />
 
-      <Text style={{ marginBottom: 8 }}>Selecciona una cuenta:</Text>
+      <TextInput
+        placeholder="Fecha (YYYY-MM-DD)"
+        placeholderTextColor="#aaa"
+        value={fecha}
+        onChangeText={setFecha}
+        style={inputStyle}
+      />
 
-      {cuentas.map((cuenta) => (
-        <Button
-          key={cuenta.id_cuenta}
-          title={cuenta.nombre}
-          onPress={() => setIdCuenta(cuenta.id_cuenta)}
+      <Text style={labelStyle}>Tipo de movimiento</Text>
+      {tipos.map(tipo => (
+        <SelectableButton
+          key={tipo.id_tipo}
+          label={tipo.nombre}
+          selected={idTipo === tipo.id_tipo}
+          color={colorPorTipo(tipo.id_tipo)}
+          onPress={() => setIdTipo(tipo.id_tipo)}
         />
       ))}
 
-      {idCuenta && (
-        <Text
-          style={{
-            borderWidth: 1,
-            borderColor: '#555',
-            marginVertical: 12,
-            padding: 10,
-            color: '#fff',
-            backgroundColor: '#222',
-            borderRadius: 6,
-          }}
-        >
-          ✅ Cuenta seleccionada
-        </Text>
+      {categorias.length > 0 && (
+        <>
+          <Text style={labelStyle}>Categoría</Text>
+          {categorias.map(cat => (
+            <SelectableButton
+              key={cat.id_categoria}
+              label={cat.nombre}
+              selected={idCategoria === cat.id_categoria}
+              onPress={() => setIdCategoria(cat.id_categoria)}
+            />
+          ))}
+        </>
       )}
+
+      <Text style={labelStyle}>Cuenta</Text>
+      {cuentas.map(cuenta => (
+        <SelectableButton
+          key={cuenta.id_cuenta}
+          label={cuenta.nombre}
+          selected={idCuenta === cuenta.id_cuenta}
+          onPress={() => setIdCuenta(cuenta.id_cuenta)}
+        />
+      ))}
 
       <Button
         title={loading ? 'Guardando...' : 'Guardar transacción'}
@@ -142,5 +257,52 @@ export default function TransaccionesScreen() {
         disabled={loading}
       />
     </View>
+  )
+}
+
+/* ───────────────────────────────
+   Componentes UI
+─────────────────────────────── */
+
+const inputStyle = {
+  borderWidth: 1,
+  borderColor: '#555',
+  marginBottom: 12,
+  padding: 10,
+  color: '#fff',
+  backgroundColor: '#222',
+  borderRadius: 6,
+}
+
+const labelStyle = {
+  marginTop: 14,
+  marginBottom: 6,
+  fontWeight: '600' as const,
+  color: '#ddd',
+}
+
+function SelectableButton({
+  label,
+  selected,
+  onPress,
+  color,
+}: {
+  label: string
+  selected: boolean
+  onPress: () => void
+  color?: string
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        padding: 10,
+        marginBottom: 6,
+        borderRadius: 6,
+        backgroundColor: selected ? color || '#4CAF50' : '#333',
+      }}
+    >
+      <Text style={{ color: '#fff' }}>{label}</Text>
+    </TouchableOpacity>
   )
 }

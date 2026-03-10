@@ -128,7 +128,7 @@ export default function Index() {
 
   if (!resumen) return <Text>Cargando…</Text>
 
-  const balance = resumen.ingresos - resumen.egresos
+  const balance = resumen.balance
   const variacion = resumen.variacion || 0
 
   return (

@@ -136,14 +136,20 @@ export default function MovimientosScreen() {
   const actualizarTransaccion = async () => {
     if (!editando || idTipo === null) return
 
-    await supabase
-      .from('transacciones')
-      .update({
-        monto: Number(monto),
-        descripcion: descripcion || null,
-        id_tipo: idTipo,
-      })
-      .eq('id_transaccion', editando.id_transaccion)
+    const { error } = await supabase.rpc(
+      'actualizar_transaccion_y_saldo',
+      {
+        p_id_transaccion: editando.id_transaccion,
+        p_nuevo_monto: Number(monto),
+        p_nuevo_tipo: idTipo,
+        p_nueva_descripcion: descripcion || null,
+      }
+    )
+
+    if (error) {
+      console.error(error)
+      return
+    }
 
     setEditando(null)
     setMonto('')

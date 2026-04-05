@@ -20,6 +20,7 @@ const CURRENT_YEAR = new Date().getFullYear()
 type Cuenta = {
   id_cuenta: string
   nombre: string
+  saldo_actual: number
 }
 
 type Vista = 'ANUAL' | 'MENSUAL'
@@ -37,6 +38,9 @@ export default function Index() {
   const [resumen, setResumen] = useState<any>(null)
   const [labels, setLabels] = useState<string[]>([])
   const [evolucion, setEvolucion] = useState<number[]>([])
+
+  // ✅ NUEVO
+  const [balanceTotal, setBalanceTotal] = useState(0)
 
   const fadeAnim = useRef(new Animated.Value(0)).current
 
@@ -71,18 +75,28 @@ export default function Index() {
     /* 🏦 Cuentas */
     const { data: cuentasData } = await supabase
       .from('cuentas')
-      .select('id_cuenta, nombre')
+      .select('id_cuenta, nombre, saldo_actual')
 
     setCuentas(cuentasData || [])
 
-    /* 📊 Resumen (sigue siendo mensual, incluso en vista anual) */
+    // ✅ SUMA REAL + guardar
+    const sumaCuentas =
+      cuentasData?.reduce((acc, c) => acc + (c.saldo_actual || 0), 0) || 0
+
+    setBalanceTotal(sumaCuentas)
+    console.log('SUMA CUENTAS:', sumaCuentas)
+
+    /* 📊 Resumen */
     const { data: resumenData } = await supabase.rpc('resumen_mes', {
       p_mes: month,
       p_anio: anio,
       p_cuenta_id: cuentaParam,
     })
 
-    setResumen(resumenData?.[0] || null)
+    const resumenFinal = resumenData?.[0] || null
+    setResumen(resumenFinal)
+
+    console.log('BALANCE RPC:', resumenFinal?.balance)
 
     /* 📈 EVOLUCIÓN */
     if (vista === 'ANUAL') {
@@ -158,7 +172,7 @@ export default function Index() {
         </TouchableOpacity>
       </View>
 
-      {/* 📅 Mes (solo mensual) */}
+      {/* 📅 Mes */}
       {vista === 'MENSUAL' && (
         <View style={styles(dark).row}>
           <TouchableOpacity onPress={() => cambiarMes(-1)}>
@@ -191,8 +205,18 @@ export default function Index() {
       <Animated.View style={{ opacity: fadeAnim }}>
         {/* 📊 KPI */}
         <View style={styles(dark).card}>
-          <Text>Balance</Text>
-          <Text style={styles(dark).balance}>{formatMoney(balance)}</Text>
+          <Text>Balance total</Text>
+          <Text style={styles(dark).balance}>
+            {formatMoney(balanceTotal)}
+          </Text>
+
+          <View style={{ marginTop: 10 }}>
+            <Text>Este mes</Text>
+            <Text style={{ fontWeight: '600' }}>
+              {formatMoney(balance)}
+            </Text>
+          </View>
+
           <Text style={{ color: variacion >= 0 ? 'green' : 'red' }}>
             {variacion >= 0 ? '↑' : '↓'} {Math.abs(variacion)}%
           </Text>
